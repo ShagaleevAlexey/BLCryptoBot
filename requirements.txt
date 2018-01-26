@@ -1,0 +1,4 @@
+requests
+six
+pymongo
+websocket_server
