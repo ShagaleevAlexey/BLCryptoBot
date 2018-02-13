@@ -2,12 +2,17 @@ import logging
 
 from app import config, logger
 import telegram
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Updater, CommandHandler, MessageHandler, Filters
+from telegram.update import Update
+from telegram.user import User
 from app.__services__.bittrex import Bittrex
+
+from app import voting
 
 class App(object):
     bot_updater = None  #type: Updater
-    _history = {}
+    votes = []
 
     def __init__(self, params: dict=None):
         self.bot_updater = Updater(config.BOT_TOKEN)
@@ -21,66 +26,77 @@ class App(object):
         dp = self.bot_updater.dispatcher
 
         dp.add_handler(CommandHandler("start", self.command_start))
-        dp.add_handler(CommandHandler("get_price", self.command_get_price, pass_args=True))
+        dp.add_handler(CommandHandler("list", self.command_list))
+        dp.add_handler(MessageHandler(Filters.text, self.command_echo))
 
-    def command_start(self, bot, update):
+    def command_start(self, bot, update: Update):
         if update is None or update.message is None:
             return
 
-        uid = update.message.chat.username
-        text = update.message.text
-
-        if text is None or len(text) == 0:
+        if update.effective_user is None:
             return
 
-        if uid not in self._history:
-            self._history[uid] = []
+        owner_id = update.effective_user.id
+        vote = voting.Vote(owner_id)
 
-        self._history[uid].append(dict(
-            text=text,
-        ))
+        self.votes.append(vote)
 
-        update.message.reply_text('Start!')
+        update.message.reply_text('Let\'s create a new poll. First, send me the question.')
 
-    def command_get_price(self, bot, update, args):
+    def command_list(self, bot, update: Update):
         if update is None or update.message is None:
             return
 
-        if len(args) != 1:
-            update.message.reply_text('I need one parameter!!! FUCK!\nExample: /get_price BTC')
+        if update.effective_user is None:
             return
 
-        need_currency_name = str(args[0]).lower()
-        bittrex = Bittrex()
+        owner_id = update.effective_user.id
 
-        result = bittrex.get_markets()
+        votes = [vote for vote in self.votes if vote.owner_id == owner_id]
 
-        if not result['success']:
-            update.message.reply_text('Error!!!')
+        if len(votes) == 0:
             return
 
-        markets = result['result']
-        usdt_markets = [r for r in markets if r['BaseCurrency'] == 'USDT']
+        vote = votes[-1]
 
-        for market in usdt_markets:
-            currency_name = str(market.get('MarketCurrency', '')).lower()
-            long_currency_name = str(market.get('MarketCurrencyLong', '')).lower()
+        update.message.reply_text('\n'.join([a.text for a in vote.answers]))
 
-            if currency_name == need_currency_name or long_currency_name == need_currency_name:
-                market_name = market.get('MarketName', '')
+    def command_echo(self, bot, update: Update):
+        if update is None or update.message is None:
+            return
 
-                result = bittrex.get_marketsummary(market_name)
+        if update.effective_user is None:
+            return
 
-                if not result['success']:
-                    return
+        owner_id = update.effective_user.id
 
-                summary = result['result'][0]
-                last = summary.get('Last')
+        votes = [vote for vote in self.votes if vote.owner_id == owner_id]
 
-                if last:
-                    update.message.reply_text(f'1 {currency_name.upper()} = {last} USDT')
-                else:
-                    update.message.reply_text('Error!!!')
+        if len(votes) == 0:
+            return
 
-                break
-        # update.message.reply_text('Start!')
+        vote = votes[-1]
+
+        if vote.vote_stage == voting.eVoteStageSetQuestion:
+            self.stage_set_question(bot, update, vote)
+        else:
+            if vote.vote_stage == voting.eVoteStageAddAnswer:
+                self.stage_add_answer(bot, update, vote)
+
+    def stage_set_question(self, bot, update: Update, vote: voting.Vote):
+        message = update.message
+
+        if message is None or message.text is None:
+            return
+
+        vote.set_question(message.text)
+
+        update.message.reply_text(f'Creating a new poll: \'{vote.question.text}\'\n\nPlease send me the first answer option.')
+
+    def stage_add_answer(self, bot, update: Update, vote: voting.Vote):
+        message = update.message
+
+        if message is None or message.text is None:
+            return
+
+        vote.add_answer(message.text)

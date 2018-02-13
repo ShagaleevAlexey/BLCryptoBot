@@ -1,4 +1,1 @@
-requests
-six
-pymongo
-websocket_server
+python-telegram-bot
