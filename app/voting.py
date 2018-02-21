@@ -13,16 +13,15 @@ class Answer:
         self.ids = []
 
 # Enum VoteStage
-eVoteStageSetQuestion = 10
-eVoteStageAddAnswer = 20
-eVoteStageFinally = 100
+eVoteStageSetQuestion   = 10
+eVoteStageAddAnswer     = 20
+eVoteStageCreated       = 30
+eVoteStageFinally       = 100
 
 class Vote:
     question: Question
-    answers: list         #type: [Answer]
+    answers: list
     owner_id: str
-
-    is_active = True
 
     vote_stage = eVoteStageSetQuestion
 
