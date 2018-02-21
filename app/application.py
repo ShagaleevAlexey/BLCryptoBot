@@ -2,13 +2,34 @@ import logging
 
 from app import config, logger
 import telegram
+# from telegram import ParseMode
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Updater, CommandHandler, MessageHandler, Filters
 from telegram.update import Update
 from telegram.user import User
+from telegram.message import Message
 from app.__services__.bittrex import Bittrex
 
 from app import voting
+
+kLetsCreatePoll = 10
+kFirstAnswer    = 11
+kSecondAnswer   = 12
+kUniqueAnswer   = 13
+
+kFinishCreate   = 19
+
+kError0         = 50
+
+
+localization = {
+    kLetsCreatePoll : 'Давайте создадим новое голосование. Введите ваш вопрос.', 
+    kFirstAnswer    : 'Введите первый вариант ответа: ',
+    kSecondAnswer   : 'Введите второй вариант ответа: ',
+    kUniqueAnswer   : 'Введите следующий вариант ответа или /done',
+    kError0         : 'Сначала нужно добавить варианты ответов!',
+    kFinishCreate   : '👍 Голосование создано! Вы можете им поделиться с группой или с друзьями.'
+}
 
 class App(object):
     bot_updater = None  #type: Updater
@@ -28,6 +49,7 @@ class App(object):
         dp.add_handler(CommandHandler("start", self.command_start))
         dp.add_handler(CommandHandler("list", self.command_list))
         dp.add_handler(MessageHandler(Filters.text, self.command_echo))
+        dp.add_handler(CommandHandler("done", self.command_done))
 
     def command_start(self, bot, update: Update):
         if update is None or update.message is None:
@@ -41,7 +63,7 @@ class App(object):
 
         self.votes.append(vote)
 
-        update.message.reply_text('Let\'s create a new poll. First, send me the question.')
+        update.message.reply_text(localization[kLetsCreatePoll])
 
     def command_list(self, bot, update: Update):
         if update is None or update.message is None:
@@ -91,7 +113,7 @@ class App(object):
 
         vote.set_question(message.text)
 
-        update.message.reply_text(f'Creating a new poll: \'{vote.question.text}\'\n\nPlease send me the first answer option.')
+        update.message.reply_text(localization[kFirstAnswer])
 
     def stage_add_answer(self, bot, update: Update, vote: voting.Vote):
         message = update.message
@@ -100,3 +122,42 @@ class App(object):
             return
 
         vote.add_answer(message.text)
+
+        if len(vote.answers) == 0:
+            update.message.reply_text(localization[kFirstAnswer])
+        else:
+            if len(vote.answers) == 1:
+                update.message.reply_text(localization[kSecondAnswer])
+            else:
+                if len(vote.answers) > 1:
+                    update.message.reply_text(localization[kUniqueAnswer])
+
+    def command_done(self, bot, update: Update):
+        if update is None or update.message is None:
+            return
+
+        if update.effective_user is None:
+            return
+
+        owner_id = update.effective_user.id
+
+        votes = [vote for vote in self.votes if vote.owner_id == owner_id]
+
+        if len(votes) == 0:
+            return
+
+        vote = votes[-1]
+
+        if len(vote.answers) == 0:
+            update.message.reply_text(localization[kError0])
+            return
+
+        message: Message = update.message
+
+        message.reply_text(localization[kFinishCreate])
+
+        vote.vote_stage = voting.eVoteStageCreated
+
+        answers = '\n▫️ 0%\n\n'.join([a.text for a in vote.answers]) + '\n▫️ 0%\n\n'
+
+        message.reply_text(f'*{vote.question.text}*\n\n{answers}', parse_mode=telegram.ParseMode.MARKDOWN)
