@@ -4,7 +4,7 @@ from app import config, logger
 import telegram
 # from telegram import ParseMode
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import Updater, CommandHandler, MessageHandler, Filters
+from telegram.ext import Updater, CommandHandler, MessageHandler, CallbackQueryHandler, Filters
 from telegram.update import Update
 from telegram.user import User
 from telegram.message import Message
@@ -50,6 +50,7 @@ class App(object):
         dp.add_handler(CommandHandler("list", self.command_list))
         dp.add_handler(MessageHandler(Filters.text, self.command_echo))
         dp.add_handler(CommandHandler("done", self.command_done))
+        dp.add_handler(CallbackQueryHandler(self.command_button))
 
     def command_start(self, bot, update: Update):
         if update is None or update.message is None:
@@ -161,3 +162,14 @@ class App(object):
         answers = '\n▫️ 0%\n\n'.join([a.text for a in vote.answers]) + '\n▫️ 0%\n\n'
 
         message.reply_text(f'*{vote.question.text}*\n\n{answers}', parse_mode=telegram.ParseMode.MARKDOWN)
+
+        keyboard = [[InlineKeyboardButton('Выслать голосование', callback_data='1', switch_inline_query_current_chat='siqcc')]]
+
+        reply_markup = InlineKeyboardMarkup(keyboard)
+
+        update.message.reply_text('Please choose:', reply_markup=reply_markup)
+
+    def command_button(self, bot, update: Update):
+        query = update.callback_query
+
+        pass
