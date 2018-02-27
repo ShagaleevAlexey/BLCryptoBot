@@ -3,7 +3,7 @@ import logging
 from app import config, logger
 import telegram
 # from telegram import ParseMode
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, KeyboardButton, ReplyKeyboardMarkup, ReplyKeyboardRemove
 from telegram.ext import Updater, CommandHandler, MessageHandler, CallbackQueryHandler, Filters
 from telegram.update import Update
 from telegram.user import User
@@ -21,6 +21,13 @@ kFinishCreate   = 19
 
 kError0         = 50
 
+kButtonCreateVote = 10
+kButtonCreateSimpleVote = 11
+
+localization_buttons = {
+    kButtonCreateVote   : '✍ Создать голосование',
+    kButtonCreateSimpleVote   : '🔥 Случайное голосование'
+}
 
 localization = {
     kLetsCreatePoll : 'Давайте создадим новое голосование. Введите ваш вопрос.', 
@@ -46,13 +53,29 @@ class App(object):
     def configurate(self):
         dp = self.bot_updater.dispatcher
 
+        dp.add_handler(CommandHandler("help", self.command_help))
         dp.add_handler(CommandHandler("start", self.command_start))
-        dp.add_handler(CommandHandler("list", self.command_list))
+
+        dp.add_handler(CommandHandler("create_vote", self.command_start))
         dp.add_handler(MessageHandler(Filters.text, self.command_echo))
         dp.add_handler(CommandHandler("done", self.command_done))
         dp.add_handler(CallbackQueryHandler(self.command_button))
 
+    def command_help(self, bot, update: Update):
+        keyboard = [[KeyboardButton(localization_buttons[kButtonCreateVote], callback_data='callback_data', resize_keyboard=True)],
+                    [KeyboardButton(localization_buttons[kButtonCreateSimpleVote], callback_data='2', resize_keyboard=True)]]
+
+        # reply_markup = InlineKeyboardMarkup(keyboard)
+        reply_markup = ReplyKeyboardMarkup(keyboard)
+
+        message: Message = update.message
+        message.reply_text('Выбери что ты хочешь сделать 👇', reply_markup=reply_markup)
+
     def command_start(self, bot, update: Update):
+        self.command_help()
+
+
+    def command_create_vote(self, bot, update: Update):
         if update is None or update.message is None:
             return
 
@@ -64,31 +87,17 @@ class App(object):
 
         self.votes.append(vote)
 
-        update.message.reply_text(localization[kLetsCreatePoll])
-
-    def command_list(self, bot, update: Update):
-        if update is None or update.message is None:
-            return
-
-        if update.effective_user is None:
-            return
-
-        owner_id = update.effective_user.id
-
-        votes = [vote for vote in self.votes if vote.owner_id == owner_id]
-
-        if len(votes) == 0:
-            return
-
-        vote = votes[-1]
-
-        update.message.reply_text('\n'.join([a.text for a in vote.answers]))
+        update.message.reply_text(localization[kLetsCreatePoll], reply_markup=ReplyKeyboardRemove())
 
     def command_echo(self, bot, update: Update):
         if update is None or update.message is None:
             return
 
         if update.effective_user is None:
+            return
+
+        if update.message.text == localization_buttons[kButtonCreateVote]:
+            self.command_create_vote(bot, update)
             return
 
         owner_id = update.effective_user.id
@@ -133,6 +142,7 @@ class App(object):
                 if len(vote.answers) > 1:
                     update.message.reply_text(localization[kUniqueAnswer])
 
+
     def command_done(self, bot, update: Update):
         if update is None or update.message is None:
             return
@@ -159,11 +169,12 @@ class App(object):
 
         vote.vote_stage = voting.eVoteStageCreated
 
-        answers = '\n▫️ 0%\n\n'.join([a.text for a in vote.answers]) + '\n▫️ 0%\n\n'
+        actual_answers = vote.actual_info_message()
 
         message.reply_text(f'*{vote.question.text}*\n\n{answers}', parse_mode=telegram.ParseMode.MARKDOWN)
 
-        keyboard = [[InlineKeyboardButton('Выслать голосование', callback_data='1', switch_inline_query_current_chat='siqcc')]]
+        keyboard = [
+            [InlineKeyboardButton('Выслать голосование', callback_data='1', switch_inline_query_current_chat='siqcc')]]
 
         reply_markup = InlineKeyboardMarkup(keyboard)
 

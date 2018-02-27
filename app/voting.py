@@ -7,10 +7,13 @@ class Question:
 class Answer:
     text: str = ''
     ids = []
+    balance = 0
 
     def __init__(self, text: str):
         self.text = text
         self.ids = []
+        self.balance = 0
+
 
 # Enum VoteStage
 eVoteStageSetQuestion   = 10
@@ -24,6 +27,7 @@ class Vote:
     owner_id: str
 
     vote_stage = eVoteStageSetQuestion
+    total_balance = 0
 
     def __init__(self, owner_id):
         self.answers = []
@@ -40,3 +44,26 @@ class Vote:
             return
 
         self.answers.append(Answer(text))
+
+    def actual_balance_message(self, answer: Answer):
+        percent = answer.balance / self.total_balance
+        message = ''
+
+        if percent == 0:
+            message += '▫️'
+        else:
+            message += ''
+
+        message += f' {percent:.0f}'
+
+        return message
+
+    def actual_info_message(self):
+        answers = f'*{self.question.text}*'
+
+        answers += '\n\n'.join([self.actual_balance_message(a) for a in answers])
+
+        answers = '\n▫️ 0%\n\n'.join([a.text for a in self.answers]) + '\n▫️ 0%\n\n'
+
+
+        pass
